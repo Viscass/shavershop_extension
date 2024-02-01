@@ -5,6 +5,16 @@ const dataFixed = "clientCode=1105&sendContentType=1&request=getProducts&getStoc
 const warehouseID = 5000000091 // Upper Mt Gravatt
 
 
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log(message.plus);
+    if (message.plus) {
+        getStockCount(message.plus).then(sendResponse);
+    }
+    return true;
+});
+
+
 const readLocalStorage = async (key) => {
     return new Promise((resolve, reject) => {
         chrome.storage.local.get([key], function (result) {
@@ -16,26 +26,6 @@ const readLocalStorage = async (key) => {
         });
     });
 };
-
-
-getCredentials().then((result) => {
-    const { username, password } = result;
-    console.log(username, password);
-    getSessionKey(username, password);
-}).catch((error) => {
-    console.log(error);
-});
-
-
-getStockCount("009963").then((result) => { console.log(result) });
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log(message.plus);
-    if (message.plus) {
-        getStockCount(message.plus).then(sendResponse);
-    }
-    return true;
-});
 
 
 
@@ -81,31 +71,48 @@ async function getStockCount(plu) {
     }
 }
 
+let port = null;
 
-async function getCredentials() {
-    try {
-        const username = await readLocalStorage('username');
-        const password = await readLocalStorage('password');
-        return { username, password };
-    } catch (error) {
-        console.log("No credentials found");
-        throw error;
-    }
-}
-
+chrome.runtime.onConnect.addListener(function(p) {
+    port = p;
+    port.onMessage.addListener(function(msg) {
+        if (msg.type === "CREDENTIALS") {
+            getSessionKey(msg.username, msg.password);
+        }
+    });
+});
 
 async function getSessionKey() {
-    let username, password;
-    try {
-        ({ username, password } = await getCredentials());
-    } catch (error) {
-        console.log(error);
+
+    let credentials;
+    // Check if the content script is ready
+    if (!port) {
+        console.log("Content script is not ready");
         return 0;
     }
 
+    try {
+        credentials = await new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({ type: "GET_CREDENTIALS" }, function (response) {
+                if (chrome.runtime.lastError) {
+                    console.log(chrome.runtime.lastError.message);
+                    reject(chrome.runtime.lastError);
+                } else {
+                    resolve(response);
+                }
+            });
+        });
+    } catch (error) {
+        console.log("Failed to get credentials: ", error);
+        return 0;
+    }
+
+    
+    let username = credentials.username
+    let password = credentials.password;
     console.log(username, password);
     const data = "clientCode=1105&sendContentType=1"
- + "&username=" + username + "&password=" + password + "&request=verifyUser&sessionLength=43200";
+ + "&username=" + credentials.username + "&password=" + credentials.password + "&request=verifyUser&sessionLength=43200";
     const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -129,6 +136,14 @@ async function getSessionKey() {
         return 0;
     }
 }
+
+
+// retrieves the session key information from erply server, then returns if it is expired
+async function getSessionKeyInfo(sessionKey) {
+    
+
+}
+
 
 
 function getCountFromJSON(obj) {
