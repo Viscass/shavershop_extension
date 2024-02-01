@@ -14,23 +14,3 @@ if (/[0-9]{6}/.test(window.location.href)) {
   })
 }
 
-var x = document.querySelectorAll(".product-tile");
-var plus = [];
-var pluString = "";
-x.forEach(printNode);
-if (pluString) {
-    pluString = pluString.substring(0, pluString.length - 1);
-}
-console.log(pluString);
-
-
-
-
-function printNode(item, index, arr) {
-    let itemID = item.dataset.itemid;
-    console.log(itemID );
-    plus.push(itemID );
-    pluString += itemID + ',';
-}
-
-
