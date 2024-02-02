@@ -1,3 +1,6 @@
+
+let stockCount; // This will be the stock count element
+
 const readLocalStorage = async (key) => {
   return new Promise((resolve, reject) => {
     chrome.storage.local.get([key], function (result) {
@@ -20,7 +23,9 @@ async function updateStockCount(plu) {
     { type: "getStockCount", plus: plu },
     (response) => {
       var count = response;
-      console.log("count: " + count);
+      if (stockCount) {
+        stockCount.textContent = "Stock count: " + count;
+      }
     }
   );
 }
@@ -56,7 +61,7 @@ async function createStockCountContainer() {
   if (!(await checkSession())) {
     createLoginForm(container);
   } else {
-    createStockCountElement(container);
+    stockCount = createStockCountElement(container);
   }
 
   // Add the container block to the body
@@ -68,6 +73,7 @@ function createStockCountElement(container) {
   const stockCount = document.createElement("p");
   stockCount.textContent = "Stock count: ?"; // You can update this value later
   container.appendChild(stockCount);
+  return stockCount;
 }
 
 function createLoginForm(container) {
