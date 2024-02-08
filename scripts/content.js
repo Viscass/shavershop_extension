@@ -32,6 +32,11 @@ async function updateStockCount(plu) {
   );
 }
 
+async function getWareHouses() {
+  const warehouses = await chrome.runtime.sendMessage({ type: "getWareHouses" });
+  return warehouses;
+}
+
 async function checkSession() {
   try {
     let sessionKey = await readLocalStorage("key");
@@ -71,6 +76,8 @@ async function createStockCountContainer() {
   if (!loginForm) {
     loginForm = createLoginForm(container);
   }
+
+  createWarehouseSelectButton(container);
 
   updateElements();
 }
@@ -141,6 +148,44 @@ function createLoginForm(container) {
   });
 
   return loginForm;
+}
+
+function createWarehouseSelectButton(container) {
+  const button = document.createElement("button");
+  button.textContent = "Select Warehouse";
+  button.addEventListener("click", showPopup);
+  container.appendChild(button);
+}
+
+// Add this function to show the popup
+async function showPopup() {
+  const popup = document.createElement("div");
+  popup.style.position = "fixed";
+  popup.style.left = "50%";
+  popup.style.top = "50%";
+  popup.style.transform = "translate(-50%, -50%)";
+  popup.style.backgroundColor = "#fff";
+  popup.style.padding = "20px";
+  popup.style.zIndex = "1001";
+
+  const warehouses = await getWareHouses();
+  const list = document.createElement("ul");
+  warehouses.forEach((warehouse) => {
+    const listItem = document.createElement("li");
+    listItem.textContent = warehouse;
+    listItem.addEventListener("click", () => selectWarehouse(warehouse));
+    list.appendChild(listItem);
+  });
+  popup.appendChild(list);
+
+  document.body.appendChild(popup);
+}
+
+// Add this function to handle warehouse selection
+function selectWarehouse(warehouse) {
+  chrome.storage.local.set({ selectedWarehouse: warehouse }, function() {
+    console.log('Warehouse selected: ' + warehouse);
+  });
 }
 
 

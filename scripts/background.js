@@ -3,6 +3,15 @@ console.log("background script");
 const url = 'https://1105.erply.com/api/'
 const warehouseID = 5000000091 // Upper Mt Gravatt
 
+chrome.storage.local.clear(function() {
+    var error = chrome.runtime.lastError;
+    if (error) {
+        console.error(error);
+    } else {
+        console.log('Local storage cleared');
+    }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log(message.plus);
     if (message.type === 'getStockCount')  {
@@ -90,10 +99,10 @@ async function getSessionKey(username, password) {
             chrome.storage.local.set({ sessionExpiry: expiry }).then(() => {
                 console.log("Sesion expires at: " + expiry);
             });
-            return 1;
+            return true;
         } else {
             console.log("getSessionKey: Oops, Invalid credentials");
-            return 0;
+            return false;
         }
     } catch (error) {
         console.error("Error in makeErplyRequest: ", error);
@@ -108,18 +117,18 @@ async function getSessionKeyInfo() {
         if (obj.status.responseStatus == "ok") {
             if (obj.records[0].expireUnixTime > obj.status.requestUnixTime) {
                 console.log("Session key is still valid");
-                return 1;
+                return true;
             } else {
                 console.log("Session key is expired");
-                return 0;
+                return false;
             }
         } else {
             console.log("Incorrect session key");
-            return 0;
+            return false;
         }
     } catch (error) {
         console.log(error);
-        return 0;
+        return false;
     };
 }
 
