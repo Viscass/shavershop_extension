@@ -1,5 +1,7 @@
 
 let stockCount; // This will be the stock count element
+let loginForm; // This will be the login form
+let container; // This will be the container block
 
 const readLocalStorage = async (key) => {
   return new Promise((resolve, reject) => {
@@ -15,7 +17,7 @@ const readLocalStorage = async (key) => {
 
 async function updateStockCount(plu) {
   if (!(await checkSession())) {
-    console.log("error getting session key");
+    console.log("Invalid session key");
     return;
   }
 
@@ -35,7 +37,7 @@ async function checkSession() {
     let sessionKey = await readLocalStorage("key");
     let sessionExpiry = await readLocalStorage("sessionExpiry");
     if (sessionKey === undefined || sessionExpiry < Date.now() / 1000) {
-      throw new Error("Session expired");
+      return false;
     }
     return true;
   } catch (error) {
@@ -46,32 +48,38 @@ async function checkSession() {
 
 async function createStockCountContainer() {
   // Create the container block
-  const container = document.createElement("div");
-  container.style.position = "fixed";
-  container.style.right = "0";
-  container.style.top = "230px";
-  container.style.transform = "translateY(-50%)";
-  container.style.backgroundColor = "#fff";
-  container.style.padding = "10px";
-  container.style.boxShadow = "0 0 10px rgba(0, 0, 0, 0.1)";
-  container.style.zIndex = "1000";
-  container.style.width = "300px"; // Add this line
-
+  if (!container) {
+    container = document.createElement("div");
+    container.style.position = "fixed";
+    container.style.right = "0";
+    container.style.top = "230px";
+    container.style.transform = "translateY(-50%)";
+    container.style.backgroundColor = "#fff";
+    container.style.padding = "10px";
+    container.style.boxShadow = "0 0 10px rgba(0, 0, 0, 0.25)";
+    container.style.zIndex = "1000";
+    container.style.width = "330px";
+    // Add the container block to the body
+    document.body.appendChild(container);
+  }
   
-  if (!(await checkSession())) {
-    createLoginForm(container);
-  } else {
+
+  if (!stockCount) {
     stockCount = createStockCountElement(container);
   }
 
-  // Add the container block to the body
-  document.body.appendChild(container);
+  if (!loginForm) {
+    loginForm = createLoginForm(container);
+  }
+
+  updateElements();
 }
 
 function createStockCountElement(container) {
   // Create the stock count element
   const stockCount = document.createElement("p");
-  stockCount.textContent = "Stock count: ?"; // You can update this value later
+  stockCount.textContent = "Stock count: ?"; // update this value later
+  stockCount.style.display = 'none'; // hide initially
   container.appendChild(stockCount);
   return stockCount;
 }
@@ -81,6 +89,11 @@ function createLoginForm(container) {
   const loginForm = document.createElement("form");
   loginForm.style.padding = "20px";
   container.appendChild(loginForm);
+
+  const logInText = document.createElement("p");
+  logInText.textContent = "Please log in to see stock count.";
+  logInText.style.marginBottom = "10px";
+  loginForm.appendChild(logInText);
 
   // Create the username field
   const usernameField = document.createElement("input");
@@ -102,6 +115,9 @@ function createLoginForm(container) {
   submitButton.value = "Log in";
   loginForm.appendChild(submitButton);
 
+  // Hide login form
+  loginForm.style.display = "none";
+
   // Handle form submission
   loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -113,24 +129,53 @@ function createLoginForm(container) {
         password: passwordField.value,
       },
       (response) => {
-        var count = response;
-        const el = document.querySelector(".brand-name");
-        const badge = document.createElement("span");
-        badge.classList.add("product-name");
-        badge.textContent = `Count: ` + count;
-        badge.style.cssFloat = "right";
-        el.insertAdjacentElement("beforeend", badge);
+        updateElements();
+        if (response) {
+          console.log("Login successful");
+        } else {        
+          console.log("Login failed");
+          alert("Login failed")
+        }
       }
     );
   });
+
+  return loginForm;
 }
 
-console.log("content script");
-if (/[0-9]{6}/.test(window.location.href)) {
+
+async function updateElements() {
+  // Check the session status
+  const sessionValid = await checkSession();
+
+  // Update the visibility of the loginForm and stockCount based on the session status
+  if (loginForm) {
+    loginForm.style.display = sessionValid ? 'none' : 'block';
+  }
+
+  if (stockCount) {
+    stockCount.style.display = sessionValid ? 'block' : 'none' ;
+  }
+
+  // If the session is valid, update the stock count
+  if (sessionValid) {
+    const plu = getCurrentPluFromUrl();
+    if (plu) {
+      updateStockCount(plu);
+    }
+  }
+}
+
+function getCurrentPluFromUrl() {
   var plu = /[0-9]{6}/.exec(window.location.href);
   console.log("plu: " + plu);
+  return plu;
+}
 
+function checkURLforPlu() {
+  return /[0-9]{6}/.test(window.location.href);
+}
+
+if (checkURLforPlu()) {
   createStockCountContainer();
-
-  updateStockCount(plu);
 }
