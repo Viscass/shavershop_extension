@@ -5,24 +5,27 @@ importScripts("shared.js");
 const url = "https://1105.erply.com/api/";
 const maxSessionLength = "43200";
 
-
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "getStockCount") {
-    getStockCount(message.plus).then(sendResponse);
-    return true;
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+  try {
+    if (message.type === "getWarehousesStockCount") {
+      const stockCount = await getStockCount(message.plus);
+      sendResponse(stockCount);
+    } else if (message.type === "logIn") {
+      const loginResult = await getSessionKey(message.username, message.password);
+      if (loginResult.success) {
+        // update the warehouses in local storage
+        const warehouses = await getWareHouses();
+        StorageManager.setLocalStorage("warehouses", JSON.stringify(warehouses));
+      }
+      sendResponse(loginResult);
+    } else if (message.type === "getSessionKeyInfo") {
+      const sessionKeyInfo = await getSessionKeyInfo();
+      sendResponse(sessionKeyInfo);
+    }
+  } catch (error) {
+    console.error(`Error in message listener: ${error}`);
   }
-  if (message.type === "getSessionKey") {
-    getSessionKey(message.username, message.password).then(sendResponse);
-    return true;
-  }
-  if (message.type === "getSessionKeyInfo") {
-    getSessionKeyInfo().then(sendResponse);
-    return true;
-  }
-  if (message.type === "getWareHouses") {
-    getWareHouses().then(sendResponse);
-    return true;
-  }
+  return true; // keeps the message channel open until sendResponse is called
 });
 
 async function makeErplyRequest(request, parameters) {
@@ -69,83 +72,6 @@ async function getStockCount(plu) {
   }
 }
 
-async function getSessionKey(username, password) {
-  try {
-    let obj = await makeErplyRequest("verifyUser", {
-      username: username,
-      password: password,
-      sessionLength: maxSessionLength,
-    });
-    if (obj.status.responseStatus == "ok") {
-      let value = obj.records[0].sessionKey;
-      setLocalStorage("key", value);
-      let expiry = obj.status.requestUnixTime + obj.records[0].sessionLength;
-      setLocalStorage("sessionExpiry", expiry);
-      return true;
-    } else {
-      console.log("getSessionKey: Oops, Invalid credentials");
-      return false;
-    }
-  } catch (error) {
-    console.error("Error in makeErplyRequest: ", error);
-  }
-}
-
-// retrieves the session key information from erply server, then returns if it is expired
-async function getSessionKeyInfo() {
-  try {
-    let sessionKey = await StorageManager.readLocalStorage("key");
-    let obj = await makeErplyRequest("getSessionKeyInfo", {
-      sessionKey: sessionKey,
-    });
-    if (obj.status.responseStatus == "ok") {
-      if (obj.records[0].expireUnixTime > obj.status.requestUnixTime) {
-        console.log("Session key is still valid");
-        return true;
-      } else {
-        console.log("Session key is expired");
-        return false;
-      }
-    } else {
-      console.log("Incorrect session key");
-      return false;
-    }
-  } catch (error) {
-    console.log(error);
-    return false;
-  }
-}
-
-async function getWareHouses() {
-  try {
-    let sessionKey = await StorageManager.readLocalStorage("key");
-    let obj = await makeErplyRequest("getAllowedWarehouses", {
-      sessionKey: sessionKey,
-    });
-    console.log(obj);
-    return await getWarehousesfromJSON(obj);
-  } catch (error) {
-    console.log(error);
-  }
-}
-
-function getWarehousesfromJSON(obj) {
-  let warehouses = obj.records;
-  let warehouseArray = [];
-  // cycle through the warehouses and get the name and id
-  console.log(warehouses);
-  for (let key in warehouses) {
-    warehouseArray.push({
-      id: warehouses[key].warehouseID,
-      name: warehouses[key].name,
-    });
-  }
-
-  return warehouseArray;
-}
-
-getWareHouses();
-
 async function getCountsFromJSON(obj) {
   console.log(obj);
   console.log(obj.records[0].warehouses);
@@ -157,3 +83,75 @@ async function getCountsFromJSON(obj) {
   console.log(warehouse_counts);
   return warehouse_counts;
 }
+
+
+async function getSessionKey(username, password) {
+  try {
+    let obj = await makeErplyRequest("verifyUser", {
+      username: username,
+      password: password,
+      sessionLength: maxSessionLength,
+    });
+    if (obj.status.responseStatus == "ok") {
+      let value = obj.records[0].sessionKey;
+      StorageManager.setLocalStorage("key", value);
+      let expiry = obj.status.requestUnixTime + obj.records[0].sessionLength;
+      StorageManager.setLocalStorage("sessionExpiry", expiry);
+      return { success: true, message: "Login successful" };
+    } else {
+      return { success: false, message: "Invalid credentials" };
+    }
+  } catch (error) {
+    console.error("Error in getSessionKey: ", error);
+    return { success: false, message: error.message };
+  }
+}
+
+// retrieves the session key information from erply server, then returns if it is expired
+async function getSessionKeyInfo() {
+  try {
+    let sessionKey = await StorageManager.readLocalStorage("key");
+    let obj = await makeErplyRequest("getSessionKeyInfo", {
+      sessionKey: sessionKey,
+    });
+
+    if (obj.status.responseStatus == "ok") {
+      if (obj.records[0].expireUnixTime > obj.status.requestUnixTime) {
+        console.log("Session key is still valid");
+        return true;
+      } else {
+        throw new Error("Session key is expired");
+      }
+    } else {
+      throw new Error("Incorrect session key");
+    }
+  } catch (error) {
+    console.error("Error in getSessionKeyInfo: ", error);
+    throw error;
+  }
+}
+
+async function getWareHouses() {
+  try {
+    let sessionKey = await StorageManager.readLocalStorage("key");
+    let obj = await makeErplyRequest("getAllowedWarehouses", {
+      sessionKey: sessionKey,
+    });
+    return getWarehousesfromJSON(obj);
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+function getWarehousesfromJSON(obj) {
+  let warehouses = obj.records;
+  let warehouseArray = warehouses.map(warehouse => ({
+    id: warehouse.warehouseID,
+    name: warehouse.name,
+  }));
+  console.log(warehouseArray);
+  return warehouseArray;
+}
+
+getWareHouses();
+
