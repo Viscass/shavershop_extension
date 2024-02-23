@@ -5,27 +5,24 @@ importScripts("shared.js");
 const url = "https://1105.erply.com/api/";
 const maxSessionLength = "43200";
 
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-  try {
-    if (message.type === "getWarehousesStockCount") {
-      const stockCount = await getStockCount(message.plus);
-      sendResponse(stockCount);
-    } else if (message.type === "logIn") {
-      const loginResult = await getSessionKey(message.username, message.password);
-      if (loginResult.success) {
-        // update the warehouses in local storage
-        const warehouses = await getWareHouses();
-        StorageManager.setLocalStorage("warehouses", JSON.stringify(warehouses));
-      }
-      sendResponse(loginResult);
-    } else if (message.type === "getSessionKeyInfo") {
-      const sessionKeyInfo = await getSessionKeyInfo();
-      sendResponse(sessionKeyInfo);
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log(message);
+    if (message.type === 'getStockCount')  {
+        getStockCount(message.plus).then(sendResponse);
+        return true;
     }
-  } catch (error) {
-    console.error(`Error in message listener: ${error}`);
-  }
-  return true; // keeps the message channel open until sendResponse is called
+    if (message.type === 'getSessionKey') {
+        getSessionKey(message.username, message.password).then(sendResponse);
+        return true; 
+    }
+    if (message.type === 'getSessionKeyInfo') {
+        getSessionKeyInfo().then(sendResponse);
+        return true;
+    }
+    if (message.type === 'getWareHouses') {
+        getWareHouses().then(sendResponse);
+        return true;
+    }
 });
 
 async function makeErplyRequest(request, parameters) {
@@ -153,5 +150,5 @@ function getWarehousesfromJSON(obj) {
   return warehouseArray;
 }
 
-getWareHouses();
 
+getWareHouses().then(console.log);

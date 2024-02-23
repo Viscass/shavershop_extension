@@ -21,7 +21,7 @@ class Content {
     this.plu = plu;
 
     this.createMainContainer();
-  }
+ }
 
   async createMainContainer() {
     // Create the container block
@@ -38,7 +38,8 @@ class Content {
     // Add the container block to the body
     document.body.appendChild(this.container);
 
-    this.stockCount = new StockCount(this.container);
+    const warehouseses = [{id: '5000000091', name: 'Upper Mt Gravatt'}, {id: '5000000092', name: ' - Held Stock'}, {id: '5000000089', name: 'Carindale'}, {id: '5000000043', name: 'Logan Hyperdome'}, {id: '5000000113', name: 'Myer Centre Brisbane'}];
+    this.stockCount = new StockCount(this.container, warehouseses);
     this.loginForm = new LoginForm(this.container, this.logInSuccess.bind(this));
 
     const sessionValid = await checkSession();
@@ -51,10 +52,12 @@ class Content {
   }
 
   async logInSuccess() {
-    await this.fetchStockInfo(this.plu);
-    this.stockCount.updateStockCount(this.stockInfo);
     this.stockCount.show();
     this.loginForm.hide();
+    await this.fetchStockInfo(this.plu);
+    console.log("Stock info: ", this.stockInfo);
+    this.stockCount.updateStockCount(this.stockInfo);
+
   }
 
   async fetchStockInfo(plu) {
@@ -63,14 +66,21 @@ class Content {
       return;
     }
   
-    chrome.runtime.sendMessage(
-      { type: "getWarehousesStockCount", plus: plu },
-      (response) => {
-        this.stockInfo = response;
-        console.log("Stock info: ", response);          
-
-      }
-    );
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(
+        { type: "getStockCount", plus: plu },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(chrome.runtime.lastError);
+            reject(chrome.runtime.lastError);
+          } else {
+            this.stockInfo = response;
+            console.log("Stock info: ", response);
+            resolve(response);
+          }
+        }
+      );
+    });
   }
 
 }
@@ -119,7 +129,7 @@ class LoginForm {
     // Handle login here
     chrome.runtime.sendMessage(
       {
-        type: "logIn",
+        type: "getSessionKey",
         username: this.usernameField.value,
         password: this.passwordField.value,
       },
@@ -145,31 +155,63 @@ class LoginForm {
 
 }
 
+
+
 class StockCount {
-  constructor(container) {
+  constructor(container, warehouses) {
     this.container = container;
-    this.warehouseID = 5000000091; // Upper Mt Gravatt;
-    this.createStockCountElement();
+    this.warehouses = warehouses; // now an array of warehouse objects
+    this.countForText = null;
+    this.stockCounts = null;
+    this.createStockCountElements();
   }
 
-  createStockCountElement() {
-    // Create the stock count element
-    this.stockCount = document.createElement("p");
-    this.stockCount.textContent = "Stock count: ?"; // update this value later
-    this.stockCount.style.display = "none"; // hide initially
-    this.container.appendChild(this.stockCount);
+  createStockCountElements() {
+    // Create the "Count for:" text
+    this.countForText = document.createElement("p");
+    this.countForText.textContent = "Count for:";
+    this.countForText.style.fontSize = "2.5em";
+    this.countForText.style.display = "none"; // hide initially
+    this.container.appendChild(this.countForText);
+
+    // Create a stock count element for each warehouse
+    this.stockCounts = this.warehouses.map((warehouse) => {
+      const stockCount = document.createElement("p");
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.textContent = `${warehouse.name}: `;
+      stockCount.appendChild(nameSpan);
+    
+      const countSpan = document.createElement("span");
+      countSpan.textContent = "?"; // update this value later
+      countSpan.style.fontWeight = 'bold'; // make the count bold
+      stockCount.appendChild(countSpan);
+    
+      stockCount.style.display = "none"; // hide initially
+      this.container.appendChild(stockCount);
+      return { p: stockCount, countSpan };
+    });
   }
 
   updateStockCount(stockInfo) {
-    this.stockCount.textContent = "Stock count: " + stockInfo[this.warehouseID];
+    this.stockCounts.forEach((stockCount, index) => {
+      const warehouse = this.warehouses[index];
+      stockCount.countSpan.textContent = `${stockInfo[warehouse.id]}`;
+    });
   }
   
   show() {
-    this.stockCount.style.display = "block";
+    this.countForText.style.display = "block";
+    this.stockCounts.forEach((stockCount) => {
+      stockCount.p.style.display = "block";
+    });
   }
 
   hide() {
-    this.stockCount.style.display = "none";
+    this.countForText.style.display = "none";
+    this.stockCounts.forEach((stockCount) => {
+      stockCount.p.style.display = "none";
+    });
   }
 }
 
