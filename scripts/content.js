@@ -28,17 +28,16 @@ class Content {
     this.container = document.createElement("div");
     this.container.style.position = "fixed";
     this.container.style.right = "0";
-    this.container.style.top = "230px";
-    this.container.style.transform = "translateY(-50%)";
+    this.container.style.top = "300px";
     this.container.style.backgroundColor = "#fff";
     this.container.style.padding = "10px";
     this.container.style.boxShadow = "0 0 10px rgba(0, 0, 0, 0.25)";
     this.container.style.zIndex = "1000";
-    this.container.style.width = "330px";
+    this.container.style.width = "250px";
     // Add the container block to the body
     document.body.appendChild(this.container);
 
-    const warehouseses = [{id: '5000000091', name: 'Upper Mt Gravatt'}, {id: '5000000092', name: ' - Held Stock'}, {id: '5000000089', name: 'Carindale'}, {id: '5000000043', name: 'Logan Hyperdome'}, {id: '5000000113', name: 'Myer Centre Brisbane'}];
+    const warehouseses = [{id: '5000000135', name: 'DFO Brisbane'}, {id: '5000000136', name: ' - Held Stock'}, {id: '5000000089', name: 'Carindale'}, {id: '5000000039', name: 'Chermside'}, {id: '5000000113', name: 'Myer Centre Brisbane'}];
     this.stockCount = new StockCount(this.container, warehouseses);
     this.loginForm = new LoginForm(this.container, this.logInSuccess.bind(this));
 
@@ -185,6 +184,7 @@ class StockCount {
       const countSpan = document.createElement("span");
       countSpan.textContent = "?"; // update this value later
       countSpan.style.fontWeight = 'bold'; // make the count bold
+      countSpan.style.float = 'right'; // align the count to the right
       stockCount.appendChild(countSpan);
     
       stockCount.style.display = "none"; // hide initially
