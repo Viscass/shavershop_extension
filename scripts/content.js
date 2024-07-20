@@ -340,58 +340,85 @@ async function updateStockLevels() {
     chrome.runtime.sendMessage({ type: 'syncProductStock', warehouseID: '5000000091' });
   }
 }
-// Call handleProductTiles when the script is first loaded
-(async function() {
-  // Call handleProductTiles when the script is first loaded
-  if (await checkSession()) {
-    console.log("Session is valid");
-    await updateStockLevels();
-    handleProductTiles();
+
+async function checkSoldStock() {
+  // Get the current time in Unix time (seconds)
+  const currentTime = Math.floor(Date.now() / 1000);
+  // Get the time 24 hours ago in Unix time (seconds)
+  const time24HoursAgo = currentTime - 24 * 60 * 60;
+
+  const productInfo = await StorageManager.readLocalStorage('productInfo');
+
+  const negativeStock = [];
+
+  const potentialSoldOut = [];
+
+  for (const product in productInfo) {
+    // If the product has a lastUpdated field and it is greater than time24HoursAgo
+    if (productInfo[product].lastUpdated && productInfo[product].lastUpdated > time24HoursAgo) {
+      // Add the product to the soldProducts array
+      if (productInfo[product].count < 0) {
+        negativeStock.push(productInfo[product]);
+      } else if (productInfo[product].count < 2) {
+        potentialSoldOut.push(productInfo[product]);
+      }
+        
+    }
   }
-})();
+
+  //sort arrays based on name
+  negativeStock.sort((a, b) => a.name.localeCompare(b.name));
+  potentialSoldOut.sort((a, b) => a.name.localeCompare(b.name));
+
+
+  console.log('Negative:', negativeStock);
+  console.log('Sold Out:', potentialSoldOut);
+  const div = document.createElement('div');
+
+  // Style the div
+  div.style.position = 'fixed';
+  div.style.right = '0';
+  div.style.top = '50%'; // Position the div halfway down the screen
+  div.style.transform = 'translateY(-50%)'; // Center the div
+  div.style.width = '200px';
+  div.style.backgroundColor = '#f8f9fa';
+  div.style.padding = '10px';
+  div.style.overflowY = 'auto';
+  div.style.maxHeight = '100vh';
+  div.style.fontSize = '12px';
+    
+  // Add a title to the div
+  div.innerHTML = '<h2 style="font-size: 20px;">Recent Stock Status</h2>';
+
+  if (negativeStock.length === 0 && potentialSoldOut.length === 0) {
+    div.innerHTML += '<p>No negative Stock or recently sold out items</p>';
+  } else {
+    if (negativeStock.length > 0) {
+      // Add the negative stock items to the div
+      div.innerHTML += '<h3 style="font-size: 16px;">Negative Stock</h3>';
+      negativeStock.forEach(product => {
+        div.innerHTML += `<span style="font-size: 10px;">${product.name} (${product.count})</p>`;
+      });
+    }
+    if (potentialSoldOut.length > 0) {
+      // Add the out of stock items to the div
+      div.innerHTML += '<h3 style="font-size: 16px;">Potentially Sold Out </h3>';
+      potentialSoldOut.forEach(product => {
+        div.innerHTML += `<span style="font-size: 10px;">${product.name} (${product.count})</p>`;
+      });
+    }
+  }
+  
+  // Append the div to the body of the document
+  document.body.appendChild(div);
 
 
 
-// async function showPopup() {
-//   const popup = document.createElement("div");
-//   popup.style.position = "fixed";
-//   popup.style.left = "50%";
-//   popup.style.top = "50%";
-//   popup.style.transform = "translate(-50%, -50%)";
-//   popup.style.backgroundColor = "#eee";
-//   popup.style.padding = "20px";
-//   popup.style.zIndex = "1001";
-//   popup.style.maxHeight = "400px"; // Set a maximum height
-//   popup.style.overflowY = "auto"; // Enable vertical scrolling
+  // Return the soldProducts array
+  return {negativeStock, potentialSoldOut};
+}
 
-//   const warehouseSelectText = document.createElement("p");
-//   warehouseSelectText.textContent = "Select a warehouse:";
-//   warehouseSelectText.style.marginBottom = "10px";
-//   warehouseSelectText.appendChild(popup);
 
-//   chrome.runtime.sendMessage({ type: "getWareHouses" }, (warehouses) => {
-//     console.log(warehouses);
-//     const list = document.createElement("ul");
-//     warehouses.forEach((warehouse) => {
-//       const listItem = document.createElement("li");
-//       listItem.textContent = warehouse.name;
-//       listItem.addEventListener("click", () => selectWarehouse(warehouse));
-//       list.appendChild(listItem);
-//     });
-//     popup.appendChild(list);
-//   });
-
-//   document.body.appendChild(popup);
-// }
-
-// // Add this function to handle warehouse selection
-// function selectWarehouse(warehouse) {
-//   chrome.storage.local.set({ warehouse: warehouse }, function () {
-//     console.log(
-//       "Warehouse selected: " + warehouse.name + " (" + warehouse.id + ")"
-//     );
-//   });
-// }
 
 function getCurrentPluFromUrl() {
   var plu = /[0-9]{6}/.exec(window.location.href);
@@ -403,9 +430,19 @@ function checkURLforPlu() {
   return /[0-9]{6}/.test(window.location.href);
 }
 
-
-handleProductTiles();
-
 if (checkURLforPlu()) {
   new Content(getCurrentPluFromUrl());
 }
+
+
+(async function() {
+  // Call handleProductTiles when the script is first loaded
+  if (await checkSession()) {
+    console.log("Session is valid");
+    await updateStockLevels();
+    handleProductTiles();
+    checkSoldStock();
+  }
+})();
+
+
