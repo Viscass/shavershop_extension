@@ -79,14 +79,20 @@ async function handleProductTiles() {
         
           // Set the text content to the stock count
           let stockCount = productInfo[pluMap[plu]].count;
-          stockCountElement.textContent = productInfo[pluMap[plu]].count;
 
-          // Change the color based on the stock count
-          if (stockCount < 2) {
+          if (stockCount === null) {
+            stockCount = 0;
+          }
+          
+          if (stockCount < 2) { // Change the color based on the stock count
             stockCountElement.style.color = 'red'; // Set the color to red if the stock count is less than 2
           } else {
             stockCountElement.style.color = 'green'; // Set the color to green otherwise
-          }
+          } 
+
+          stockCountElement.textContent = stockCount;
+
+
 
 
           // Append the stock count element to the product tile
@@ -391,7 +397,7 @@ async function checkSoldStock() {
   div.innerHTML = '<h2 style="font-size: 20px;">Recent Stock Status</h2>';
 
   if (negativeStock.length === 0 && potentialSoldOut.length === 0) {
-    div.innerHTML += '<p>No negative Stock or recently sold out items</p>';
+    div.innerHTML += '<p>No recent sold out or negative stock</p>';
   } else {
     if (negativeStock.length > 0) {
       // Add the negative stock items to the div
