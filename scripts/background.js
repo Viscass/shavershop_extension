@@ -23,6 +23,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         getWareHouses().then(sendResponse);
         return true;
     }
+  
+    if (message.type === 'getAllProducts') {
+        getAllProducts().then(sendResponse);
+        return true;
+    }
+  
+    if (message.type === 'syncProductStock') {
+      syncProductStock(message.warehouseID).then(sendResponse);
+      return true;
+    }
 });
 
 async function makeErplyRequest(request, parameters) {
@@ -32,7 +42,6 @@ async function makeErplyRequest(request, parameters) {
     data += "&" + key + "=" + parameters[key];
   }
 
-  console.log(data);
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -70,8 +79,6 @@ async function getStockCount(plu) {
 }
 
 async function getCountsFromJSON(obj) {
-  console.log(obj);
-  console.log(obj.records[0].warehouses);
   let warehouse_counts = {};
 
   for (let key in obj.records[0].warehouses) {
@@ -80,7 +87,6 @@ async function getCountsFromJSON(obj) {
   console.log(warehouse_counts);
   return warehouse_counts;
 }
-
 
 async function getSessionKey(username, password) {
   try {
@@ -146,9 +152,120 @@ function getWarehousesfromJSON(obj) {
     id: warehouse.warehouseID,
     name: warehouse.name,
   }));
-  console.log(warehouseArray);
   return warehouseArray;
 }
 
+function getProductsfromJSON(obj) {
+  let productArray = obj.records.map(product => ({
+    id: product.productID,
+    plu: product.code,
+    name: product.name,
+    count: null,
+    lastUpdated: null,
+  }));
+  console.log(productArray)
+  return productArray;
+}
 
-getWareHouses().then(console.log);
+
+async function getAllProducts() {
+  try {
+    let sessionKey = await StorageManager.readLocalStorage("key");
+    let pluMap = {};
+    let productInfo = {};
+    let numProducts = 0;
+    let page = 1;
+    let recordsOnPage = 1000;
+    let recordsTotal = 0;
+    do {
+      let obj = await makeErplyRequest("getProducts", {
+        sessionKey: sessionKey,
+        recordsOnPage: recordsOnPage,
+        pageNo: page,
+      });
+      if (obj.status.responseStatus != "ok") {
+        console.log("Error in getting products");
+        return null;
+      }
+      numProducts += obj.status.recordsInResponse;
+      recordsTotal = obj.status.recordsTotal;
+      page += 1;
+      let products = getProductsfromJSON(obj);
+      products.forEach(product => {
+        pluMap[product.plu] = product.id;
+
+        const { id, ...otherProperties } = product;
+        productInfo[id] = otherProperties;
+      });
+
+
+    } while (numProducts < recordsTotal);
+
+    // Store the product dictionarys in local storage
+    StorageManager.setLocalStorage("pluMap", pluMap);
+    StorageManager.setLocalStorage("productInfo", productInfo);
+
+
+    return {pluMap, productInfo};
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+
+async function syncProductStock(warehouseID, overrideLastUpdate = false) {
+  try {
+    let sessionKey = await StorageManager.readLocalStorage("key");
+    let lastUpdated = 0;
+    if (overrideLastUpdate) {
+      lastUpdated = overrideLastUpdate;
+    } else {
+      try {
+        lastUpdated = await StorageManager.readLocalStorage("lastUpdatedStock");
+      } catch (error) {
+        console.log("No last updated stock found");
+      }
+    }
+    console.log("lastUpdated: " + lastUpdated);
+
+    let obj = await makeErplyRequest("getProductStock", {
+      warehouseID: warehouseID,
+      changedSince: lastUpdated,
+      sessionKey: sessionKey,
+    });
+
+    console.log(obj);
+
+    if (obj.status.responseStatus != "ok") {
+      console.log("Error in syncing product stock");
+      return null;
+    }
+
+    let productInfo = {}
+
+    try {
+      productInfo = await StorageManager.readLocalStorage("productInfo");
+    } catch (error) {
+      console.log("No product info found in local storage");
+      ({_, productInfo} = await getAllProducts());
+      console.log("products fetched");
+    }
+
+    obj.records.forEach(record => {
+      if (!productInfo[record.productID]) {
+        console.log("Product ID: ", record.productID, " not found in productInfo");
+      } else {
+        let stockCount = parseInt(record.amountInStock, 10);
+        productInfo[record.productID].count = stockCount;
+        productInfo[record.productID].lastUpdated = lastUpdated == 0 ? 0 : obj.status.requestUnixTime;
+      }
+    });
+
+    StorageManager.setLocalStorage("lastUpdatedStock", obj.status.requestUnixTime);
+    StorageManager.setLocalStorage("productInfo", productInfo);
+    return productInfo;
+  } catch (error) {
+    console.log(error);
+  }
+}
+
